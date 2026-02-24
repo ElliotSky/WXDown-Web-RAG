@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wxchatrag"
+version = "0.1.0"
+description = "RAG over WXhub PDFs"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+  "langchain==0.3.2",
+  "langchain-community==0.3.1",
+  "langchain-text-splitters==0.3.0",
+  "langchain-openai==0.2.2",
+  "openai==1.52.2",
+  "tiktoken==0.7.0",
+  "faiss-cpu==1.8.0.post1",
+  "pypdf==5.0.1",
+  "python-dotenv==1.0.1",
+]
+
+[project.scripts]
+wxchatrag = "wxchatrag.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+
+

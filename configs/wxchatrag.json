@@ -1,0 +1,12 @@
+{
+  "wxhub_root": "data/WXhub",
+  "pdf_subdir_name": "pdf",
+  "pdf_glob_pattern": "",
+  "vector_store_dir": "storage/vector_store",
+  "embedding_model_name": "embedding-3",
+  "chat_model_name": "deepseek-chat",
+  "chunk_size": 1000,
+  "chunk_overlap": 200,
+  "retriever_k": 5,
+  "temperature": 0.2
+}

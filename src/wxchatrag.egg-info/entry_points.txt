@@ -1,0 +1,2 @@
+[console_scripts]
+wxchatrag = wxchatrag.cli:main

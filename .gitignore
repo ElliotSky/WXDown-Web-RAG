@@ -1,0 +1,25 @@
+.env
+.env.*
+!.env.example
+!configs/env.example
+
+__pycache__/
+*.py[cod]
+*.pyd
+.Python
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+venv/
+.venv/
+
+# RAG artifacts
+storage/
+data/
+WXhub/
+*.faiss
+*.pkl
+!data/README.md
+
+
