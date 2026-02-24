@@ -23,3 +23,9 @@ WXhub/
 !data/README.md
 
 
+# packaging / build artifacts
+*.egg-info/
+dist/
+build/
+
+
