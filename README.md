@@ -2,7 +2,7 @@
 
 <div align="center">
 
-**基于微信公众号 PDF 语料的本地 RAG（Retrieval-Augmented Generation）检索问答系统**
+**基于微信公众号知识库语料的 RAG（Retrieval-Augmented Generation）检索问答系统**
 
 [![Python](https://img.shields.io/badge/Python-3.9+-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-All%20Rights%20Reserved-red.svg)](LICENSE)
@@ -29,7 +29,7 @@
 ### 核心功能
 
 - **📚 本地知识库构建**
-  - 支持微信公众号导出的 PDF 文档加载、切分、向量化与索引构建
+  - 支持微信公众号导出的知识库文档加载、切分、向量化与索引构建（搭配WXdown-Web-server项目）
   - 支持多种文档切分策略：固定大小、句子、语义、层次化、滑动窗口
   - 增量更新机制，通过 `manifest.json` 记录变更，仅处理新增或修改文件
 
