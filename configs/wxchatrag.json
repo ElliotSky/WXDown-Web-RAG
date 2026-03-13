@@ -1,12 +1,38 @@
 {
+  "_comment": "项目默认配置文件 - 包含稳定的、不经常变动的参数",
+  "_note": "个人化配置（API Key、路径等）请使用 .env 文件，优先级：环境变量 > 本文件 > 代码默认值",
+  
   "wxhub_root": "data/WXhub",
   "pdf_subdir_name": "pdf",
   "pdf_glob_pattern": "",
   "vector_store_dir": "storage/vector_store",
+  "bm25_index_dir": "storage/bm25_index",
+  "models_cache_dir": "storage/models",
+  
   "embedding_model_name": "embedding-3",
   "chat_model_name": "deepseek-chat",
+  
   "chunk_size": 1000,
   "chunk_overlap": 200,
+  "chunk_strategy": "fixed",
+  "semantic_threshold": 0.5,
+  "semantic_embedding_mode": "local",
+  "semantic_embedding_model_name": "BAAI/bge-small-zh-v1.5",
+  "semantic_sentence_split_mode": "mixed",
+  "semantic_sentence_split_regex": "",
+  
   "retriever_k": 5,
-  "temperature": 0.2
+  "temperature": 0.2,
+  
+  "retrieval_strategy": "hybrid",
+  "hybrid_alpha": 0.7,
+  "bm25_k": 20,
+  "vector_k": 20,
+  
+  "enable_rerank": true,
+  "rerank_model_name": "BAAI/bge-reranker-base",
+  "rerank_top_n": 20,
+  "rerank_top_k": 5,
+  "rerank_batch_size": 16,
+  "rerank_device": "cpu"
 }

@@ -2,6 +2,10 @@
 .env.*
 !.env.example
 !configs/env.example
+configs/env
+
+.vscode/
+docs/
 
 __pycache__/
 *.py[cod]

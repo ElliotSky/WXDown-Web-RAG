@@ -15,7 +15,7 @@ dependencies = [
   "langchain-openai==0.2.2",
   "openai==1.52.2",
   "tiktoken==0.7.0",
-  "faiss-cpu==1.8.0.post1",
+  "faiss-cpu>=1.12.0",
   "pypdf==5.0.1",
   "python-dotenv==1.0.1",
 ]

@@ -10,8 +10,62 @@ from langchain_community.document_loaders import PyPDFLoader
 from langchain_core.documents import Document
 
 
-_TITLE_CLEAN_RE = re.compile(r"[\s\-_—–·\.，,。！？!?:：;；'\"“”‘’()（）\[\]【】<>《》/\\]+")
+_TITLE_CLEAN_RE = re.compile(r"[\s\-_—–·\.，,。！？!?:：;；'\"\"''()（）\[\]【】<>《》/\\]+")
 _DATE_TITLE_RE = re.compile(r"^(?P<date>\d{4}-\d{2}-\d{2})-(?P<title>.+)$")
+
+
+def _clean_pdf_text(text: str) -> str:
+    """清理 PDF 提取的文本，合并多余的换行。
+    
+    PyPDFLoader 提取的文本可能保留 PDF 的原始布局格式，导致每个词或短语单独成行。
+    此函数将单个换行符合并为空格，但保留段落边界（空行或句子结束后的换行）。
+    
+    Args:
+        text: 原始 PDF 文本
+        
+    Returns:
+        清理后的文本
+    """
+    if not text:
+        return ""
+    
+    # 使用一个不太可能在文本中出现的字符串作为段落边界标记
+    PARA_MARKER = "___PARAGRAPH_BOUNDARY_MARKER___"
+    
+    # 步骤1: 标记段落边界
+    # 1.1 空行标记为段落边界
+    text = re.sub(r'\n\s*\n+', PARA_MARKER, text)
+    
+    # 1.2 句子结束标点后的换行，如果下一行以大写字母、中文或数字开头，标记为段落边界
+    # 中文和英文的句子结束标点
+    sentence_endings = r'[。！？.!?]'
+    # 匹配：句子结束标点 + 可选空格 + 换行 + 下一行以大写/中文/数字开头
+    # 使用原始字符串避免 Unicode 转义问题
+    chinese_char_pattern = r'[\u4e00-\u9fff]'  # 中文字符范围
+    text = re.sub(
+        rf'({sentence_endings})\s*\n+(?=[A-Z{chinese_char_pattern}0-9])',
+        r'\1' + PARA_MARKER,
+        text,
+        flags=re.MULTILINE
+    )
+    
+    # 步骤2: 将剩余的单个换行符合并为空格
+    text = re.sub(r'\n+', ' ', text)
+    
+    # 步骤3: 恢复段落边界（将特殊标记替换为双换行）
+    text = text.replace(PARA_MARKER, '\n\n')
+    # 合并多个连续的段落标记
+    text = re.sub(r'\n\n+', '\n\n', text)
+    
+    # 步骤4: 清理多余的空格（但保留段落分隔）
+    # 将多个连续空格合并为单个空格
+    text = re.sub(r' +', ' ', text)
+    # 清理段落分隔前后的空格
+    text = re.sub(r' *\n\n *', '\n\n', text)
+    # 清理行首行尾空格
+    text = re.sub(r'^\s+|\s+$', '', text, flags=re.MULTILINE)
+    
+    return text.strip()
 
 
 @dataclass(frozen=True)
@@ -110,6 +164,8 @@ def load_pdf_documents(
         meta = build_metadata(pdf_path=pdf_path, channel_indexes=channel_indexes)
         loader = PyPDFLoader(str(pdf_path))
         for d in loader.load():
+            # 清理 PDF 文本，合并多余的换行
+            d.page_content = _clean_pdf_text(d.page_content)
             d.metadata.update(
                 {
                     "source": str(pdf_path),

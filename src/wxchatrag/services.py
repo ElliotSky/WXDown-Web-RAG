@@ -7,8 +7,14 @@ from typing import Iterable
 from langchain_core.documents import Document
 
 from .exceptions import DataSourceNotFoundError
-from .ingest import _load_or_create_store, persist_vector_store, split_docs
-from .manifest import build_file_state, load_manifest, save_manifest, select_changed
+from .ingest import (
+    _load_or_create_bm25_store,
+    _load_or_create_store,
+    persist_bm25_index,
+    persist_vector_store,
+    split_docs,
+)
+from .manifest import FileState, build_file_state, load_manifest, save_manifest, select_changed
 from .rag_query import RagResponse, query_rag
 from .settings import Settings, get_settings
 from .wxhub_loader import build_channel_indexes, iter_pdf_paths, load_pdf_documents
@@ -88,8 +94,12 @@ class RagIngestService:
             docs,
             chunk_size=s.chunk_size,
             chunk_overlap=s.chunk_overlap,
+            chunk_strategy=s.chunk_strategy,
+            embedding_model_name=s.embedding_model_name,
+            semantic_threshold=s.semantic_threshold,
         )
 
+        # 构建向量库
         vs = _load_or_create_store(
             vector_store_dir=s.vector_store_dir,
             embedding_model_name=s.embedding_model_name,
@@ -98,7 +108,15 @@ class RagIngestService:
         )
         persist_vector_store(vs, str(s.vector_store_dir))
 
-        # 更新 manifest：表示“哪些 PDF 已经完成向量化”
+        # 构建 BM25 索引
+        bm25_store = _load_or_create_bm25_store(
+            bm25_index_dir=s.bm25_index_dir,
+            chunks=chunks,
+            mode=mode,
+        )
+        persist_bm25_index(bm25_store)
+
+        # 更新 manifest：表示"哪些 PDF 已经完成向量化"
         manifest_path = s.vector_store_dir / "manifest.json"
         old_manifest = load_manifest(manifest_path)
         # 先保留旧的已处理文件，再用本次实际处理的文件状态覆盖 / 补充

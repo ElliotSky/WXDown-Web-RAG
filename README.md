@@ -63,6 +63,7 @@ pip install -r requirements.txt
 
 ```bash
 pip install -e .
+# 或 pip install -e . --no-deps 
 ```
 
 > 建议使用虚拟环境（如 conda / venv），并在安装前先激活环境。

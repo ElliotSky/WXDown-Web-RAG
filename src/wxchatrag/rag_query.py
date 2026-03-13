@@ -12,6 +12,8 @@ from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 from wxchatrag.exceptions import VectorStoreNotFoundError
 from wxchatrag.settings import get_settings
+from wxchatrag.retrieval.hybrid_retriever import HybridRetriever
+from wxchatrag.rerank.reranker import Reranker
 
 
 @dataclass(frozen=True)
@@ -44,7 +46,14 @@ def load_vector_store(*, vector_store_dir: str, embedding_model_name: str) -> FA
     if not Path(vector_store_dir).is_dir():
         raise VectorStoreNotFoundError(f"未找到向量库目录，请先执行 ingest: {vector_store_dir}")
     # 与 ingest 阶段保持一致，控制 GLM Embedding 的批大小，避免 input 数组超过 64 条。
-    embeddings = OpenAIEmbeddings(model=embedding_model_name, chunk_size=64)
+    from .settings import get_embedding_api_config
+    api_key, base_url = get_embedding_api_config()
+    embeddings = OpenAIEmbeddings(
+        model=embedding_model_name, 
+        chunk_size=64,
+        api_key=api_key,
+        base_url=base_url,
+    )
     return FAISS.load_local(vector_store_dir, embeddings, allow_dangerous_deserialization=True)
 
 
@@ -165,26 +174,80 @@ def query_rag(
     """执行一次标准化 RAG 查询，并返回答案与来源列表。"""
     s = get_settings()
     k = retriever_k if retriever_k is not None else s.retriever_k
-    vs = load_vector_store(
-        vector_store_dir=str(s.vector_store_dir),
-        embedding_model_name=s.embedding_model_name,
-    )
-    # 使用带分数的检索，便于输出“检索到了什么”的中间状态。
-    scored = vs.similarity_search_with_score(question, k=k)
+
+    # 根据检索策略选择检索方式
+    if s.retrieval_strategy == "hybrid":
+        # 混合检索
+        try:
+            hybrid_retriever = HybridRetriever.from_storage(
+                vector_store_dir=s.vector_store_dir,
+                bm25_index_dir=s.bm25_index_dir,
+                embedding_model_name=s.embedding_model_name,
+                hybrid_alpha=s.hybrid_alpha,
+                bm25_k=s.bm25_k,
+                vector_k=s.vector_k,
+            )
+            # 初始检索（混合检索返回更多结果，用于重排序）
+            initial_k = s.rerank_top_n if s.enable_rerank else k
+            scored = hybrid_retriever.retrieve(question, top_k=initial_k)
+        except FileNotFoundError as e:
+            raise VectorStoreNotFoundError(str(e))
+    elif s.retrieval_strategy == "bm25":
+        # 仅 BM25 检索
+        from wxchatrag.retrieval.bm25_store import BM25Store
+
+        bm25_store = BM25Store(s.bm25_index_dir)
+        if not bm25_store.exists():
+            raise VectorStoreNotFoundError(
+                f"BM25 索引不存在，请先执行 ingest: {s.bm25_index_dir}"
+            )
+        bm25_store.load()
+        initial_k = s.rerank_top_n if s.enable_rerank else k
+        scored = bm25_store.search(question, top_k=initial_k)
+    else:
+        # 默认：仅向量检索（保持向后兼容）
+        vs = load_vector_store(
+            vector_store_dir=str(s.vector_store_dir),
+            embedding_model_name=s.embedding_model_name,
+        )
+        initial_k = s.rerank_top_n if s.enable_rerank else k
+        scored_with_distance = vs.similarity_search_with_score(question, k=initial_k)
+        # 转换为 (Document, score) 格式
+        scored = [(doc, 1.0 / (1.0 + distance)) for doc, distance in scored_with_distance]
+
     if debug_retrieval:
-        _print_debug_hits(scored, k=k, question=question, preview_chars=preview_chars)
+        _print_debug_hits(scored, k=len(scored), question=question, preview_chars=preview_chars)
+
+    # 重排序（如果启用）
+    if s.enable_rerank and len(scored) > k:
+        reranker = Reranker(
+            model_name=s.rerank_model_name,
+            cache_dir=s.models_cache_dir / "reranker",
+            device=s.rerank_device,
+            batch_size=s.rerank_batch_size,
+        )
+        docs_to_rerank = [doc for doc, _ in scored]
+        reranked = reranker.rerank(question, docs_to_rerank, top_k=k)
+        # 转换为统一格式
+        scored = [(doc, score) for doc, score in reranked]
+    else:
+        # 直接取 top-k
+        scored = scored[:k]
 
     docs = [d for d, _ in scored]
     if not docs:
-        return RagResponse(answer="当前向量库中没有找到与问题足够相关的内容，暂时无法回答。", sources=[])
+        return RagResponse(
+            answer="当前向量库中没有找到与问题足够相关的内容，暂时无法回答。", sources=[]
+        )
 
     context, sources = _format_docs(docs)
     prompt = _build_prompt()
 
-    # 向量检索已使用 GLM / 其它 OpenAI 兼容服务提供的 Embedding（由 OPENAI_* 决定），
-    # 这里显式使用 DeepSeek 提供的 Chat 接口，避免与 Embedding 复用同一组环境变量。
-    chat_api_key = (os.getenv("DEEPSEEK_API_KEY") or os.getenv("OPENAI_API_KEY") or "").strip()
-    chat_base_url = (os.getenv("DEEPSEEK_BASE_URL") or os.getenv("OPENAI_BASE_URL") or "").strip()
+    # 优先使用功能导向的环境变量（EMBEDDING_* 和 CHAT_*），向后兼容旧的平台导向变量
+    from .settings import get_chat_api_config
+    chat_api_key, chat_base_url = get_chat_api_config()
+    chat_api_key = (chat_api_key or "").strip()
+    chat_base_url = (chat_base_url or "").strip()
 
     llm = ChatOpenAI(
         model=s.chat_model_name,
