@@ -72,8 +72,6 @@ def _resolve_wxhub_root(repo_root: Path, wxhub_root: Path) -> Path:
     - 绝对路径：直接返回
     - 相对路径：基于项目根目录拼接
 
-    不再内置对历史根目录 WXhub/ 的隐式兼容，
-    如需使用旧路径，请显式配置 WXHUB_ROOT。
     """
     if wxhub_root.is_absolute():
         return wxhub_root

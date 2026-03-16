@@ -19,6 +19,7 @@ def _clean_pdf_text(text: str) -> str:
     
     PyPDFLoader 提取的文本可能保留 PDF 的原始布局格式，导致每个词或短语单独成行。
     此函数将单个换行符合并为空格，但保留段落边界（空行或句子结束后的换行）。
+    同时处理中文字符间不应有空格的情况。
     
     Args:
         text: 原始 PDF 文本
@@ -31,17 +32,15 @@ def _clean_pdf_text(text: str) -> str:
     
     # 使用一个不太可能在文本中出现的字符串作为段落边界标记
     PARA_MARKER = "___PARAGRAPH_BOUNDARY_MARKER___"
+    chinese_char_pattern = r'[\u4e00-\u9fff]'  # 中文字符范围
+    chinese_punct_pattern = r'[，。！？：；、]'  # 中文标点
     
     # 步骤1: 标记段落边界
     # 1.1 空行标记为段落边界
     text = re.sub(r'\n\s*\n+', PARA_MARKER, text)
     
     # 1.2 句子结束标点后的换行，如果下一行以大写字母、中文或数字开头，标记为段落边界
-    # 中文和英文的句子结束标点
     sentence_endings = r'[。！？.!?]'
-    # 匹配：句子结束标点 + 可选空格 + 换行 + 下一行以大写/中文/数字开头
-    # 使用原始字符串避免 Unicode 转义问题
-    chinese_char_pattern = r'[\u4e00-\u9fff]'  # 中文字符范围
     text = re.sub(
         rf'({sentence_endings})\s*\n+(?=[A-Z{chinese_char_pattern}0-9])',
         r'\1' + PARA_MARKER,
@@ -49,7 +48,30 @@ def _clean_pdf_text(text: str) -> str:
         flags=re.MULTILINE
     )
     
-    # 步骤2: 将剩余的单个换行符合并为空格
+    # 步骤2: 智能处理换行
+    # 2.1 中文字符间的换行：直接删除（不插入空格）
+    # 匹配：中文字符 + 可选空格 + 换行 + 可选空格 + 中文字符
+    text = re.sub(
+        rf'({chinese_char_pattern})\s*\n+\s*({chinese_char_pattern})',
+        r'\1\2',
+        text
+    )
+    
+    # 2.2 中文字符 + 换行 + 中文标点：删除换行和空格
+    text = re.sub(
+        rf'({chinese_char_pattern})\s*\n+\s*({chinese_punct_pattern})',
+        r'\1\2',
+        text
+    )
+    
+    # 2.3 重复的单个中文字符（如"年\n年"）：合并为一个
+    text = re.sub(
+        rf'({chinese_char_pattern})\s*\n+\s*\1',
+        r'\1',
+        text
+    )
+    
+    # 2.4 将剩余的单个换行符合并为空格
     text = re.sub(r'\n+', ' ', text)
     
     # 步骤3: 恢复段落边界（将特殊标记替换为双换行）
@@ -57,7 +79,29 @@ def _clean_pdf_text(text: str) -> str:
     # 合并多个连续的段落标记
     text = re.sub(r'\n\n+', '\n\n', text)
     
-    # 步骤4: 清理多余的空格（但保留段落分隔）
+    # 步骤4: 后处理 - 清理异常空格
+    # 4.1 删除中文字符之间的空格
+    text = re.sub(
+        rf'({chinese_char_pattern})\s+({chinese_char_pattern})',
+        r'\1\2',
+        text
+    )
+    
+    # 4.2 删除中文标点前的空格
+    text = re.sub(
+        rf'\s+({chinese_punct_pattern})',
+        r'\1',
+        text
+    )
+    
+    # 4.3 合并连续重复的单个中文字符（处理可能遗留的情况）
+    text = re.sub(
+        rf'({chinese_char_pattern})\s+\1',
+        r'\1',
+        text
+    )
+    
+    # 步骤5: 清理多余的空格（但保留段落分隔）
     # 将多个连续空格合并为单个空格
     text = re.sub(r' +', ' ', text)
     # 清理段落分隔前后的空格
